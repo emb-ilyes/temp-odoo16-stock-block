@@ -2,6 +2,7 @@
 from odoo import models, fields, _
 from odoo.exceptions import UserError
 
+
 class ConfirmOverride(models.TransientModel):
     _name = 'cpss.confirm.override'
     _description = 'Confirmation Override'
@@ -10,20 +11,23 @@ class ConfirmOverride(models.TransientModel):
     order_id = fields.Many2one('sale.order', required=True, ondelete='cascade')
 
     def action_confirm(self):
-        config = self.env['ir.config_parameter'].sudo()
-        mode = config.get_param('cpss.stock_mode', 'block')
-        allow_override = config.get_param('cpss.allow_manager_override', 'False') == 'True'
+        order = self.order_id
 
-        # Security Check: If the system is in strict 'block' mode,
-        # ensure the user actually has the manager override group before allowing confirmation.
-        if mode == 'block':
-            has_group = self.env.user.has_group('cpss_sale_stock_min_qty_block.group_allow_below_min_stock')
-            if not (allow_override and has_group):
-                raise UserError(_("Vous n'êtes pas autorisé à forcer cette confirmation en mode de blocage strict."))
+        # Security check: in strict blockage mode, only users holding the
+        # bypass right (override setting enabled + bypass group) may force
+        # the confirmation. In warning mode anyone may proceed (everyone was
+        # already warned by this wizard).
+        if order._cpss_get_stock_mode() == 'block' and not order._cpss_has_bypass_right():
+            raise UserError(_(
+                "Vous n'êtes pas autorisé à forcer cette confirmation "
+                "en mode de blocage strict."
+            ))
 
-        # Proceed with forced confirmation
-        return self.order_id.with_context(
-            cpss_force_confirm=self.order_id.id
+        # Proceed with the forced confirmation. sale.order.action_confirm
+        # re-checks the rights server-side (a forged context cannot bypass
+        # the blockage) and warns stock personnel afterwards.
+        return order.with_context(
+            cpss_force_confirm=order.id
         ).action_confirm()
 
     def action_cancel(self):

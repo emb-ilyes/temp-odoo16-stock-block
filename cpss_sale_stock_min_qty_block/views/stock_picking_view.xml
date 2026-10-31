@@ -1,0 +1,15 @@
+<odoo>
+    <record id="view_picking_form_cpss_min_qty_alert" model="ir.ui.view">
+        <field name="name">stock.picking.form.cpss.min.qty.alert</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="before">
+                <div class="alert alert-warning mb-0" role="alert" style="white-space: pre-line;"
+                     attrs="{'invisible': ['|', ('cpss_min_qty_alert', '=', False), ('cpss_min_qty_alert', '=', '')]}">
+                    <field name="cpss_min_qty_alert" nolabel="1"/>
+                </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>
