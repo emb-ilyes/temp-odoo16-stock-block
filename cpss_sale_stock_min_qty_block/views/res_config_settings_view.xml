@@ -1,0 +1,55 @@
+<odoo>
+    <record id="res_config_settings_view_cpss" model="ir.ui.view">
+        <field name="name">res.config.settings.cpss</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="stock.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+
+            <!-- NEW SECTION AFTER WAREHOUSE -->
+            <xpath expr="//div[@name='warehouse_setting_container']" position="after">
+
+                <!-- Section Title -->
+                <h2>Stock minimum (CPSS)</h2>
+
+                <div class="row mt16 o_settings_container">
+
+                    <div class="col-12 col-lg-6 o_setting_box">
+
+                        <!-- LEFT ICON / TOOLTIP AREA -->
+<!--                        <div class="o_setting_left_pane">-->
+<!--                            <span class="fa fa-exclamation-triangle text-warning"-->
+<!--                                  title="Empêche ou avertit la vente lorsque le stock prévisionnel descend sous le minimum défini sur le produit."/>-->
+<!--                        </div>-->
+
+                        <!-- RIGHT CONTENT -->
+                        <div class="o_setting_right_pane">
+
+                            <label for="cpss_stock_mode"/>
+
+                            <div class="text-muted">
+                                Choisissez le comportement lors d'une vente sous le stock minimum.
+                                Pour avertir ou empêcher la vente lorsque le stock prévisionnel descend sous le minimum défini sur le produit.
+                            </div>
+
+                            <div class="content-group">
+
+                                <field name="cpss_stock_mode"/>
+
+                                <div class="mt8">
+                                    <field name="cpss_allow_manager_override"/>
+                                    <label for="cpss_allow_manager_override"/>
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </xpath>
+
+        </field>
+    </record>
+</odoo>

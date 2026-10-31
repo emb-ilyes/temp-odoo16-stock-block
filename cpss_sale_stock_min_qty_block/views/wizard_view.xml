@@ -1,0 +1,17 @@
+<odoo>
+    <record id="view_confirm_override" model="ir.ui.view">
+        <field name="name">cpss.confirm.override.form</field>
+        <field name="model">cpss.confirm.override</field>
+        <field name="arch" type="xml">
+            <form string="Confirmation">
+                <div class="oe_title">
+                    <field name="message" nolabel="1"/>
+                </div>
+                <footer>
+                    <button string="Confirmer" type="object" name="action_confirm" class="btn-primary"/>
+                    <button string="Annuler" type="object" name="action_cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>
