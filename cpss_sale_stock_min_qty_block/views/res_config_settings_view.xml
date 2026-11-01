@@ -27,8 +27,12 @@
                             <label for="cpss_stock_mode"/>
 
                             <div class="text-muted">
-                                Choisissez le comportement lors d'une vente sous le stock minimum.
-                                Pour avertir ou empêcher la vente lorsque le stock prévisionnel descend sous le minimum défini sur le produit.
+                                Choisissez le comportement lors d'une vente sous le stock minimum :
+                                avertir ou bloquer la confirmation lorsque le stock prévisionnel descend
+                                sous le minimum défini dans les règles de réapprovisionnement du produit
+                                (champ « Min Quantity »), pour les articles dont l'option
+                                « Bloquer vente sous stock minimum » est cochée (onglet Inventaire ou
+                                Informations générales du produit).
                             </div>
 
                             <div class="content-group">

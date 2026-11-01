@@ -58,11 +58,15 @@ class SaleOrder(models.Model):
                 )
                 product_qties[line.product_id] += qty_in_product_uom
 
-            # Batch query the active reordering rules of the order products
+            # Batch query the active reordering rules of the order products.
+            # sudo() is required: reordering rules are only readable by the
+            # stock groups, and the check must run for every account type
+            # (a plain sales user would otherwise get an AccessError).
             product_ids = storable_lines.mapped('product_id')
-            orderpoints = self.env['stock.warehouse.orderpoint'].search([
+            orderpoints = self.env['stock.warehouse.orderpoint'].sudo().search([
                 ('product_id', 'in', product_ids.ids),
                 ('warehouse_id', '=', order.warehouse_id.id),
+                ('company_id', '=', order.company_id.id),
                 ('active', '=', True),
             ])
 
@@ -129,12 +133,14 @@ class SaleOrder(models.Model):
         # Audit note on the sale order for its followers
         self.message_post(body=body)
 
-        # Stock personnel to warn (Inventory users and managers)
+        # Stock personnel to warn (Inventory users and managers), searched
+        # with sudo so the notification works for every confirming account
+        # type.
         stock_groups = (
             self.env.ref('stock.group_stock_user')
             | self.env.ref('stock.group_stock_manager')
         )
-        stock_users = self.env['res.users'].search([
+        stock_users = self.env['res.users'].sudo().search([
             ('groups_id', 'in', stock_groups.ids),
             ('active', '=', True),
         ])
