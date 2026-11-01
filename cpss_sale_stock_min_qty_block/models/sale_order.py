@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from collections import defaultdict
 
-from odoo import _, fields, models
+from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
 
@@ -15,6 +15,38 @@ class SaleOrder(models.Model):
         help="Alerte enregistrée lorsque la vente a été confirmée alors que "
              "le stock prévisionnel descendait sous le stock minimum.",
     )
+    cpss_min_qty_warning = fields.Text(
+        string="Alerte stock minimum (avant confirmation)",
+        compute='_cpss_compute_min_qty_warning',
+        help="Alerte affichée en temps réel, dès la saisie des quantités, "
+             "tant que la commande n'est pas confirmée.",
+    )
+
+    @api.depends(
+        'order_line', 'order_line.product_id', 'order_line.product_uom',
+        'order_line.product_uom_qty', 'order_line.display_type',
+        'warehouse_id',
+    )
+    def _cpss_compute_min_qty_warning(self):
+        """Live warning shown while the quotation is being prepared, before
+        it is even saved: block warning in strict blockage mode, alert
+        otherwise (warning mode or authorized bypass)."""
+        for order in self:
+            order.cpss_min_qty_warning = False
+            violations = order._cpss_order_violations()
+            if not violations:
+                continue
+            if order._cpss_get_stock_mode() == 'block' and not order._cpss_has_bypass_right():
+                prefix = _(
+                    "Blocage stock minimum : cette commande ne peut pas être "
+                    "enregistrée ni confirmée sous le stock minimum :\n"
+                )
+            else:
+                prefix = _(
+                    "Attention : cette commande fera descendre le stock sous "
+                    "le minimum :\n"
+                )
+            order.cpss_min_qty_warning = prefix + order._cpss_violations_message(violations)
 
     # ------------------------------------------------------------------
     # Helpers
@@ -38,67 +70,92 @@ class SaleOrder(models.Model):
             'cpss_sale_stock_min_qty_block.group_allow_below_min_stock'
         )
 
+    def _cpss_order_violations(self):
+        """Return ``{product: (forecasted_after_sale, min_qty)}`` for this
+        order's current lines.
+
+        Works on unsaved orders too (used by the live warning displayed as
+        soon as a quantity is entered). Only products flagged with
+        ``cpss_block_below_min`` are controlled; everything else exits
+        before querying the reordering rules.
+        """
+        self.ensure_one()
+        storable_lines = self.order_line.filtered(
+            lambda l: l.product_id and l.product_id.type == 'product' and not l.display_type
+        )
+        if not storable_lines or not self.warehouse_id:
+            return {}
+
+        # Only flagged products are controlled: cheap exit otherwise
+        flagged_products = storable_lines.product_id.filtered('cpss_block_below_min')
+        if not flagged_products:
+            return {}
+
+        # Group quantities by product (to handle duplicate lines) and
+        # convert them to the product's default UoM
+        product_qties = defaultdict(float)
+        for line in storable_lines:
+            if line.product_id not in flagged_products:
+                continue
+            qty_in_product_uom = line.product_uom._compute_quantity(
+                line.product_uom_qty, line.product_id.uom_id
+            )
+            product_qties[line.product_id] += qty_in_product_uom
+
+        # Batch query the active reordering rules of the flagged products.
+        # sudo() is required: reordering rules are only readable by the
+        # stock groups, and the check must run for every account type
+        # (a plain sales user would otherwise get an AccessError).
+        orderpoints = self.env['stock.warehouse.orderpoint'].sudo().search([
+            ('product_id', 'in', flagged_products.ids),
+            ('warehouse_id', '=', self.warehouse_id.id),
+            ('company_id', '=', self.company_id.id),
+            ('active', '=', True),
+        ])
+
+        # Map each product to its active minimum quantity
+        product_to_min_qty = {}
+        for op in orderpoints:
+            if op.product_min_qty > product_to_min_qty.get(op.product_id, 0.0):
+                product_to_min_qty[op.product_id] = op.product_min_qty
+
+        # Evaluate the product thresholds
+        violations = {}
+        for product, qty_to_sell in product_qties.items():
+            min_qty = product_to_min_qty.get(product)
+            if min_qty is None:
+                continue
+
+            # Fetch virtual available in the correct warehouse context
+            virtual_available = product.with_context(
+                warehouse=self.warehouse_id.id
+            ).virtual_available
+            forecasted_after_sale = virtual_available - qty_to_sell
+
+            if forecasted_after_sale < min_qty:
+                violations[product] = (forecasted_after_sale, min_qty)
+        return violations
+
+    def _cpss_violations_message(self, violations):
+        """Human-readable message for ``{product: (forecast, min_qty)}``."""
+        violating_lines = [
+            "- %s (Stock prévu: %.2f, Minimum requis: %.2f)"
+            % (product.display_name, forecasted_after_sale, min_qty)
+            for product, (forecasted_after_sale, min_qty) in violations.items()
+        ]
+        return (
+            _("Les articles suivants descendent sous le stock minimum autorisé :\n%s")
+            % "\n".join(violating_lines)
+        )
+
     def _cpss_get_below_min_messages(self):
         """Return ``{order_id: message}`` for the orders of ``self`` whose
         confirmation would bring the forecasted stock below the minimum."""
         messages = {}
         for order in self:
-            storable_lines = order.order_line.filtered(
-                lambda l: l.product_id and l.product_id.type == 'product' and not l.display_type
-            )
-            if not storable_lines or not order.warehouse_id:
-                continue
-
-            # Group quantities by product (to handle duplicate lines) and
-            # convert them to the product's default UoM
-            product_qties = defaultdict(float)
-            for line in storable_lines:
-                qty_in_product_uom = line.product_uom._compute_quantity(
-                    line.product_uom_qty, line.product_id.uom_id
-                )
-                product_qties[line.product_id] += qty_in_product_uom
-
-            # Batch query the active reordering rules of the order products.
-            # sudo() is required: reordering rules are only readable by the
-            # stock groups, and the check must run for every account type
-            # (a plain sales user would otherwise get an AccessError).
-            product_ids = storable_lines.mapped('product_id')
-            orderpoints = self.env['stock.warehouse.orderpoint'].sudo().search([
-                ('product_id', 'in', product_ids.ids),
-                ('warehouse_id', '=', order.warehouse_id.id),
-                ('company_id', '=', order.company_id.id),
-                ('active', '=', True),
-            ])
-
-            # Map each product to its active minimum quantity
-            product_to_min_qty = defaultdict(float)
-            for op in orderpoints:
-                if op.product_min_qty > product_to_min_qty[op.product_id]:
-                    product_to_min_qty[op.product_id] = op.product_min_qty
-
-            # Evaluate the product thresholds
-            violating_lines = []
-            for product, qty_to_sell in product_qties.items():
-                if product.cpss_block_below_min and product in product_to_min_qty:
-                    min_qty = product_to_min_qty[product]
-
-                    # Fetch virtual available in the correct warehouse context
-                    virtual_available = product.with_context(
-                        warehouse=order.warehouse_id.id
-                    ).virtual_available
-                    forecasted_after_sale = virtual_available - qty_to_sell
-
-                    if forecasted_after_sale < min_qty:
-                        violating_lines.append(
-                            "- %s (Stock prévu: %.2f, Minimum requis: %.2f)"
-                            % (product.display_name, forecasted_after_sale, min_qty)
-                        )
-
-            if violating_lines:
-                messages[order.id] = (
-                    _("Les articles suivants descendent sous le stock minimum autorisé :\n%s")
-                    % "\n".join(violating_lines)
-                )
+            violations = order._cpss_order_violations()
+            if violations:
+                messages[order.id] = order._cpss_violations_message(violations)
         return messages
 
     def _cpss_open_override_wizard(self, message, title):

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "Sale Stock Min Quantity Block",
-    "version": "16.0.1.1.0",
+    "version": "16.0.1.2.0",
     "summary": "Block sale orders if stock goes below minimum quantity",
     "author": "CPSS",
     "license": "AGPL-3",
