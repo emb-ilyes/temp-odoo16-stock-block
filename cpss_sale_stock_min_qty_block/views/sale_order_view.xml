@@ -1,0 +1,58 @@
+<odoo>
+    <record id="view_order_form_cpss_min_qty_alert" model="ir.ui.view">
+        <field name="name">sale.order.form.cpss.min.qty.alert</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <!-- Persistent alert after the confirmation -->
+            <xpath expr="//sheet" position="before">
+                <div class="alert alert-warning mb-0" role="alert" style="white-space: pre-line;"
+                     attrs="{'invisible': ['|', ('cpss_min_qty_alert', '=', False), ('cpss_min_qty_alert', '=', '')]}">
+                    <field name="cpss_min_qty_alert" nolabel="1"/>
+                </div>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_order_form_cpss_min_qty_warning" model="ir.ui.view">
+        <field name="name">sale.order.form.cpss.min.qty.warning</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+
+            <!-- Live warning while the quotation is prepared (before save),
+                 shown as soon as a quantity drops the forecast below the
+                 minimum; hidden once the order is confirmed (the persistent
+                 alert takes over). -->
+            <xpath expr="//sheet" position="before">
+                <div class="alert alert-warning mb-0" role="alert" style="white-space: pre-line;"
+                     attrs="{'invisible': ['|', ('cpss_min_qty_warning', 'in', [False, '']), ('state', 'not in', ['draft', 'sent'])]}">
+                    <field name="cpss_min_qty_warning" nolabel="1"/>
+                </div>
+            </xpath>
+
+            <!-- Color the order line rows: red in strict blockage, orange
+                 in warning mode / authorized bypass. -->
+            <xpath expr="//field[@name='order_line']/tree" position="attributes">
+                <attribute name="decoration-danger">cpss_min_qty_severity == 'block'</attribute>
+                <attribute name="decoration-warning">cpss_min_qty_severity == 'warning'</attribute>
+            </xpath>
+
+            <!-- Per-line message displayed right next to Odoo's own
+                 availability widget (qty_at_date_widget), live. -->
+            <xpath expr="//field[@name='order_line']/tree//widget[@name='qty_at_date_widget']" position="after">
+                <field name="cpss_min_qty_severity" invisible="1"/>
+                <field name="cpss_min_qty_warning" string="Alerte stock" optional="show"/>
+            </xpath>
+
+            <!-- Same message inside the expanded line form, under the
+                 availability widget. -->
+            <xpath expr="//field[@name='order_line']/form//div[@name='ordered_qty']//widget[@name='qty_at_date_widget']" position="after">
+                <div class="text-danger">
+                    <field name="cpss_min_qty_warning" nolabel="1"/>
+                </div>
+            </xpath>
+
+        </field>
+    </record>
+</odoo>

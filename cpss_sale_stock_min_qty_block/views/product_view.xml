@@ -2,14 +2,31 @@
     <record id="product_template_form_cpss" model="ir.ui.view">
         <field name="name">product.template.cpss</field>
         <field name="model">product.template</field>
-        <field name="inherit_id" ref="product.product_template_only_form_view"/>
+        <!-- Inherit the BASE template form so the flag is shown on every
+             product form derived from it:
+             - product_template_only_form_view (Products menu / template form)
+             - product_normal_form_view       (product.product variant form) -->
+        <field name="inherit_id" ref="product.product_template_form_view"/>
         <field name="arch" type="xml">
+
+            <!-- Primary placement: Inventory tab (visible when the
+                 "Manage product packagings" feature is enabled). -->
             <xpath expr="//page[@name='inventory']" position="inside">
-                <group string="test stock min">
-                            <field name="cpss_block_below_min" colspan="2" placeholder="test."/>
+                <group string="Stock minimum (CPSS)">
+                    <field name="cpss_block_below_min" colspan="2"/>
                 </group>
-<!--                <field name="cpss_block_below_min"/>-->
             </xpath>
+
+            <!-- Fallback placement: the Inventory tab is hidden by default
+                 on a fresh database (it requires product.group_stock_packaging),
+                 so expose the same option on the always-visible
+                 General Information tab. -->
+            <xpath expr="//page[@name='general_information']" position="inside">
+                <group string="Stock minimum (CPSS)">
+                    <field name="cpss_block_below_min" colspan="2"/>
+                </group>
+            </xpath>
+
         </field>
     </record>
 </odoo>
